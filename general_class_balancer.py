@@ -63,7 +63,7 @@ def get_class_selection(classes,primed):
 	num_classes = len(np.unique(classes))
 	selection = np.zeros(classes.shape,dtype=bool)
 	hasher = {}
-	rr = range(len(classes))
+	rr = list(range(len(classes)))
 	random.shuffle(rr)
 	for i in rr:
 		p = primed[i]
@@ -150,12 +150,12 @@ def class_balance(classes,confounds,plim = 0.05,recurse=True):
 		primed = get_prime_form(confounds,no_buckets, sorted_confounds)
 		primed = np.prod(primed,axis=0,dtype=int)
 		selection = get_class_selection(classes,primed)
-		rr = range(confounds.shape[0])
+		rr = list(range(confounds.shape[0]))
 		random.shuffle(rr)
 		for i in rr:
 			if not isinstance(confounds[i,0],str):
 				ts = [confounds[i,np.logical_and(selection, classes == j)] for j in unique_classes]
-				if np.any(map(lambda k: len(k) < 5, ts)):
+				if np.any(list(map(lambda k: len(k) < 5, ts))):
 					selection = np.zeros(classes.shape,dtype=bool)
 					break
 				min_p,max_p = multi_mannwhitneyu(ts)
