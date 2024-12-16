@@ -2,7 +2,7 @@
 
 name = "general_class_balancer"
 
-version = "0.0.3"
+version = "0.0.4"
 
 dependencies = [
   "numpy>=1.22.0",
