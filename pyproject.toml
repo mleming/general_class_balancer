@@ -1,0 +1,35 @@
+[project]
+
+name = "general_class_balancer"
+
+version = "0.0.1"
+
+dependencies = [
+  "numpy>=1.22.0",
+  "scipy>=1.9.3",
+  "matplotlib",
+  "pandas"
+]
+requires-python = ">=3.8"
+
+authors = [
+  {name = "Matt Leming", email = "mleming@mgh.harvard.edu"}
+]
+maintainers = [
+  {name = "Matt Leming", email = "mleming@mgh.harvard.edu"}
+]
+
+description = "Matches datapoints from an imbalanced class to a balanced one."
+
+readme = {file = "README.md", content-type="text/markdown"}
+
+license = {text = "MIT License"}
+
+keywords = ["mri", "biomedical", "pytorch", "deep learning", "machine learning", "ehr"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.urls]
+Homepage = "https://github.com/mleming/general_class_balancer"
