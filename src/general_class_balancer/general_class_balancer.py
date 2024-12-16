@@ -321,3 +321,146 @@ def separate_set(selections,set_divisions = [0.5,0.5],IDs=None):
 		if not is_none and IDs[i] not in prime_hasher:
 			prime_hasher[IDs[i]] = j + 1
 	return selections_ids
+
+from copy import deepcopy as copy
+
+def recompute_selection_ratios(selection_ratios,selection_limits,N):
+	new_selection_ratios = copy(selection_ratios)
+	assert(np.any(np.isinf(selection_limits)))
+	variable = [True for i in range(len(selection_ratios))]
+
+	for i in range(len(selection_ratios)):
+		if selection_ratios[i] * N > selection_limits[i]:
+			new_selection_ratios[i] = selection_limits[i] / N
+			variable[i] = False
+		else:
+			new_selection_ratios[i] = selection_ratios[i]
+	vsum = 0.0
+	nvsum = 0.0
+	for i in range(len(selection_ratios)):
+		if variable[i]: vsum += new_selection_ratios[i]
+		else: nvsum += new_selection_ratios[i]
+	assert(nvsum < 1)
+	for i in range(len(selection_ratios)):
+		if variable[i]:
+			new_selection_ratios[i] = \
+				(new_selection_ratios[i] / vsum) * (1 - nvsum)
+	return new_selection_ratios
+
+def get_balanced_filename_list(test_variable,confounds_array,
+		selection_ratios = [0.66,0.16,0.16],
+		selection_limits = [np.Inf,np.Inf,np.Inf],value_ranges = [],
+		output_selection_savepath = None,test_value_ranges=None,
+		get_all_test_set=False,total_size_limit=None,
+		verbose=False,non_confound_value_ranges = {},database = None,
+		n_buckets = 10,patient_id_key=None):
+	if len(value_ranges) == 0:
+		value_ranges = [None for _ in confounds_array]
+	assert(len(value_ranges) == len(confounds_array))
+	
+	covars_df = database
+	if verbose: print("len(covars): %d" % len(covars_df))
+	value_selection = np.ones((len(covars_df),),dtype=bool)
+	for ncv in non_confound_value_ranges:
+		if ncv in confounds_array:
+			print("confounds_array: %s" % str(confounds_array))
+			print("non_confound_value_ranges: %s" % \
+				str(non_confound_value_ranges))
+			print("ncv: %s" % str(ncv))
+		assert(ncv not in confounds_array)
+		confounds_array.append(ncv)
+		value_ranges.append(non_confound_value_ranges[ncv])
+	confounds_array.append(test_variable)
+	value_ranges.append(test_value_ranges)
+	if verbose: print("confounds_array: %s" % str(confounds_array))
+	if verbose: print("value_ranges: %s" % str(value_ranges))
+	for i in range(len(confounds_array)):
+		temp_value_selection = np.zeros((len(covars_df),),dtype=bool)
+		c = covars_df[confounds_array[i]]
+		value_range = value_ranges[i]
+		if value_range is None:
+			continue
+		if isinstance(value_range,tuple):
+			for j in range(len(c)):
+				if c[j] is None:
+					continue
+				if c[j] >= value_range[0] and\
+						 c[j] <= value_range[1]:
+					temp_value_selection[j] = True
+		elif callable(value_range):
+			for j in range(len(c)):
+				if c[j] is None:
+					continue
+				if value_range(c[j]):
+					temp_value_selection[j] = True
+		else:
+			for j in range(len(c)):
+				if c[j] is None:
+					continue
+				if c[j] in value_range:
+					temp_value_selection[j] = True	
+		value_selection = np.logical_and(value_selection,
+					temp_value_selection)
+	del confounds_array[-1]
+	del value_ranges[-1]
+	for ncv in non_confound_value_ranges:
+		del confounds_array[-1]
+		del value_ranges[-1]
+	if verbose:
+		print("value_selection.sum(): %s"%str(value_selection.sum()))
+	if verbose:
+		print("value_selection.shape: %s"%str(value_selection.shape))
+	covars_df = covars_df[value_selection]
+	covars_df = covars_df.sample(frac=1)
+	test_vars = covars_df[test_variable].to_numpy(dtype=np.dtype(object))
+	# If it's a string array, it just returns strings
+	test_vars = bucketize(test_vars,n_buckets)
+	ccc = {}
+	if output_selection_savepath is not None and \
+			os.path.isfile(output_selection_savepath):
+		selection = np.load(output_selection_savepath)
+	else:
+		
+		if len(confounds_array) == 0:
+			if verbose: print(test_value_ranges)
+			selection = class_balance(test_vars,[],
+				unique_classes=test_value_ranges,plim=0.1)
+		else:
+			selection = class_balance(test_vars,
+				covars_df[confounds_array].to_numpy(\
+					dtype=np.dtype(object)).T,
+				unique_classes=test_value_ranges,plim=0.1)
+		selection_ratios = recompute_selection_ratios(selection_ratios,
+			selection_limits,np.sum(selection))
+		if total_size_limit is not None:
+			select_sum = selection.sum()
+			rr = list(range(len(selection)))
+			for i in rr:
+				if select_sum <= total_size_limit:
+					break
+				if selection[i]:
+					selection[i] = 0
+					select_sum -= 1
+		if patient_id_key is None:
+			selection = separate_set(selection,selection_ratios)
+		else:
+			selection = separate_set(selection,selection_ratios,
+				covars_df[patient_id_key].to_numpy(dtype=\
+				np.dtype(object)).T)
+		if output_selection_savepath is not None:
+			np.save(output_selection_savepath,selection)
+	all_files = (covars_df.index.values)
+	if get_all_test_set:
+		selection[selection == 0] = 2
+	X_files = [all_files[selection == i] \
+			for i in range(1,len(selection_ratios) + 1)]
+	Y_files = [test_vars[selection == i] \
+			for i in range(1,len(selection_ratios) + 1)]
+	if verbose: print(np.sum([len(x) for x in X_files]))
+	for i in range(len(X_files)):
+		rr = list(range(len(X_files[i])))
+		random.shuffle(rr)
+		X_files[i] = X_files[i][rr]
+		Y_files[i] = Y_files[i][rr]
+	return X_files,Y_files
+
