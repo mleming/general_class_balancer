@@ -47,6 +47,37 @@ def is_nan(k,inc_null_str=False):
 		else:
 			return False
 
+def bucketize(arr,n_buckets):
+	non_arr_list = []
+	max_ = -np.Inf
+	min_ = np.Inf
+	for i in range(len(arr)):
+		if not is_nan(arr[i]):
+			if isinstance(arr[i],str): return arr
+			non_arr_list.append(arr[i])
+			if arr[i] > max_: max_ = arr[i]
+			if arr[i] < min_: min_ = arr[i]
+	bucketized_list = np.array(["NaN" for i in range(len(arr))],
+			dtype=np.dtype(object))
+	non_arr_list = sorted(non_arr_list)
+	skips = int(len(non_arr_list)/float(n_buckets)) + 1
+	buckets = np.array(non_arr_list[::skips])
+	range_dist=((np.arange(n_buckets)/float(n_buckets-1))*(max_-min_))+min_
+	while len(buckets) < n_buckets:
+		print(buckets)
+		buckets = np.array([buckets[0]] + list(buckets))
+	buckets = (range_dist + buckets) / 2
+	for i in range(len(arr)):
+		if not is_nan(arr[i]):
+			for j in range(len(buckets)-1):
+				if arr[i] > buckets[j] and \
+						arr[i] <= buckets[j+1]:
+					bucketized_list[i] = str(j)
+					break
+	return bucketized_list
+
+#
+
 # This method uses prime numbers to speed up datapoint matching. Each bucket
 # gets a prime number, and each datapoint is assigned a product of these primes.
 # These are then matched with one another.
